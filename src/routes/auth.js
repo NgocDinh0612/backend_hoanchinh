@@ -160,28 +160,24 @@ router.get('/me', authenticate, (req, res) => {
   });
 });
 
-// router cho email
-
-router.get('/verify-email',async (req, res) => {
-  const { token } =req.query;
+// Xác minh email
+router.get("/verify-email", async (req, res) => {
+  const { token } = req.query;
   try {
-    const user = await User.findOne({
-      verificationToken: token,
-      verificationExpires: { $gt: Date.now() }
-    });
-    if ( User ) {
-      return res.status(400).json({ message: "Token không hợp lệ hoặc đã hết hạn"});
-
+    const user = await User.findOne({ verificationToken: token });
+    if (!user) {
+      return res.status(400).json({ message: "Token không hợp lệ hoặc đã hết hạn" });
     }
-    user.verified = true;
-    user.verificationToken =undefined;
-    user.verficationExpires = undefined;
+
+    user.isVertified = true; // đúng field
+    user.verificationToken = null; // clear token
     await user.save();
-    res.json({ message: "Xác nhận email thành công. Bạn có thể đăng nhập bằng Google"});
+
+    res.json({ message: "Xác nhận email thành công. Bạn có thể đăng nhập." });
   } catch (err) {
-    console.error("GET /auth/vertify-email error: ", err.message);
-    res.status(500).json({ message: "Lỗi server khi xác nhận email"})
+    console.error("GET /auth/verify-email error: ", err.message);
+    res.status(500).json({ message: "Lỗi server khi xác nhận email" });
   }
-})
+});
 
 module.exports = router;
