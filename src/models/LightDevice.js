@@ -6,6 +6,7 @@ const LightDeviceSchema = new mongoose.Schema({
     lat: { type: Number, default: null },
     lon: { type: Number, default: null }
   }, // MAC address chính là deviceId
+  gatewayId: { type: String, default: null },
   name: { type: String, required: true },
   location: { type: String, default: "" },
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: false },

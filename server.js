@@ -101,7 +101,7 @@ const LightStatus = require('./src/models/LightStatus');
 const Schedule = require('./src/models/Schedule');
 
 const app = express();
-
+app.set('trust proxy', 1); 
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: false, // tắt nếu frontend load script ngoài

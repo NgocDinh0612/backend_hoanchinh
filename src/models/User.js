@@ -2,17 +2,16 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
-    firstName: { type: String, required: true },
-    lastName: { type: String, required: true },
+    firstName: { type: String, default: "" },
+    lastName: { type: String, default: "" },
 
     email: { type: String, required: true, unique: true },
-    contact: { type: String }, // SĐT (không bắt buộc)
-    address1: { type: String }, // Địa chỉ (không bắt buộc)
+    contact: { type: String, default: "" },
+    address1: { type: String, default: "" },
 
-    username: { type: String, unique: true, sparse: true }, 
-    // sparse để cho phép user Google không cần username ngay từ đầu
+    username: { type: String, unique: true, sparse: true },
 
-    password: { type: String }, // Hash password (chỉ cho local login)
+    password: { type: String },
 
     role: {
       type: String,
@@ -21,15 +20,15 @@ const userSchema = new mongoose.Schema(
     },
 
     // Xác thực email
-    verified: { type: Boolean, default: false },
+    isVerified: { type: Boolean, default: false },
     verificationToken: { type: String },
     verificationExpiry: { type: Date },
 
     // OAuth
-    googleId: { type: String }, // Lưu ID từ Google
-
+    googleId: { type: String },
+    lastActivity: { type: Date },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("User", userSchema);
+module.exports = mongoose.model("User", userSchema);  
