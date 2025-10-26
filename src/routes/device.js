@@ -374,6 +374,9 @@ router.post("/:id/command", authenticate, async (req, res) => {
     if (!device) {
       return res.status(404).json({ ok: false, message: "Không tìm thấy thiết bị" });
     }
+    if (device.type === "gateway" && !target) {
+      return res.status(400).json({ ok: false, message: "Gateway không điều khiển trực tiếp. Vui lòng chỉ định 'target' là node (ví dụ ND_01)." });
+    }
 
     // create pending command helper (Command model should have timestamps: true)
     const createPendingCommand = async (targetDeviceId, commandName, params = {}) => {
