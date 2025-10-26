@@ -40,8 +40,10 @@ const normalizeNodesArray = (nodes) => {
 router.post("/register", async (req, res) => {
   try {
     const { mac, nodes: providedNodes } = req.body;
+    console.log(`[REGISTER] Received request: mac=${mac}, nodes=${JSON.stringify(providedNodes)}`); // Thêm log để debug
 
     if (!isValidMac(mac)) {
+      console.log(`[REGISTER] Invalid MAC: ${mac}`);
       return res.status(400).json({ ok: false, message: "Invalid MAC address" });
     }
 
@@ -132,6 +134,7 @@ router.post("/register", async (req, res) => {
 router.get("/pending", authenticate, async (req, res) => {
   try {
     const devices = await LightDevice.find({ user: null, isDeleted: { $ne: true }, type: "gateway" });
+    console.log(`[PENDING] Found ${devices.length} pending gateways`);
     res.json({ ok: true, devices });
   } catch (err) {
     console.error("[PENDING] error:", err && err.stack ? err.stack : err);
@@ -464,7 +467,7 @@ router.get("/:deviceId/next-command", async (req, res) => {
     if (nodeIds.length > 0) {
       orConditions.push({ deviceId: { $in: nodeIds } }); // commands targeted at known nodes
     }
-    // Match commands targeted at ND_* where params.sourceGateway equals this gateway (catch commands created even if node record not present)
+    // Match commands targeted at ND_* where params.sourceGateway equals this gateway (catch commands created even if node absent in DB)
     orConditions.push({ $and: [{ 'params.sourceGateway': deviceId }, { deviceId: { $regex: '^ND_' } }] });
 
     // Try to find node-targeted command first
@@ -521,22 +524,24 @@ router.get("/:deviceId/next-command", async (req, res) => {
 router.post("/report", async (req, res) => {
   try {
     const { gw_id, devices, mac, cmd, commandId, brightness } = req.body;
+    console.log(`[REPORT] Received report: gw_id=${gw_id}, mac=${mac}, devices=${JSON.stringify(devices)}`); // Thêm log để debug
 
     // Gateway new format
     if (gw_id && Array.isArray(devices)) {
-      // Assume gw_id is a label (hardcoded "GW_01" in gateway), find a gateway (for demo, assume single or handle accordingly)
-      // For multi-gateway, consider adding logic to map gw_id to actual deviceId if needed
+      // Map gw_id "GW_01" to actual gateway (find by type or hardcode if single gateway)
+      let gateway = await LightDevice.findOne({ type: "gateway" }); // Demo: assume single gateway
+      if (!gateway && mac && isValidMac(mac)) {
+        gateway = await LightDevice.findOne({ deviceId: mac.toUpperCase(), type: "gateway" });
+      }
+      const gatewayId = gateway ? gateway.deviceId : null;
+
       for (const d of devices) {
         const nodeId = (d.deviceId || "").toString();
         if (!nodeId) continue;
 
-        // Check if node exists, create if not (assume associated with a gateway)
+        // Check if node exists, create if not (associate with gateway)
         let nodeDevice = await LightDevice.findOne({ deviceId: nodeId });
         if (!nodeDevice) {
-          // Find a gateway to associate (for demo, find first gateway)
-          const gateway = await LightDevice.findOne({ type: "gateway" });
-          const gatewayId = gateway ? gateway.deviceId : null;
-
           nodeDevice = await LightDevice.create({
             deviceId: nodeId,
             type: "node",
