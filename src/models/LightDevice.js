@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 
 const LightDeviceSchema = new mongoose.Schema({
   deviceId: { type: String, required: true, unique: true },
-  type: { type: String, enum: ["gateway","node"], default: "node" },
+  type: { type: String, enum: ["gateway", "node", "device"], default: "device" },
   gps: {
     lat: { type: Number, default: null },
     lon: { type: Number, default: null }
