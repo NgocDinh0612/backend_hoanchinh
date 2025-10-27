@@ -1,3 +1,4 @@
+
 // const express = require("express");
 // const router = express.Router();
 // const mongoose = require("mongoose");
@@ -392,6 +393,23 @@
 //     if (target) {
 //       const nodeId = String(target).toUpperCase();
 
+//       // --- mark previous pending same-type commands as replaced to avoid gateway picking old ones ---
+//       try {
+//         if (typeof brightness === "number") {
+//           await Command.updateMany(
+//             { deviceId: nodeId, status: "pending", command: "BRIGHTNESS" },
+//             { $set: { status: "replaced", replacedAt: new Date() } }
+//           );
+//         } else if (state !== undefined) {
+//           await Command.updateMany(
+//             { deviceId: nodeId, status: "pending", command: { $in: ["ON", "OFF"] } },
+//             { $set: { status: "replaced", replacedAt: new Date() } }
+//           );
+//         }
+//       } catch (e) {
+//         console.warn("[COMMAND] Failed to mark old pending commands (non-fatal):", e && e.stack ? e.stack : e);
+//       }
+
 //       if (typeof brightness === "number") {
 //         if (brightness < 0 || brightness > 100) {
 //           return res.status(400).json({ ok: false, message: "Brightness phải từ 0 đến 100" });
@@ -473,22 +491,23 @@
 //     // Match commands targeted at ND_* where params.sourceGateway equals this gateway (catch commands created even if node absent in DB)
 //     orConditions.push({ $and: [{ 'params.sourceGateway': deviceId }, { deviceId: { $regex: '^ND_' } }] });
 
-//     // Try to find node-targeted command first
+//     // Try to find node-targeted command first (choose newest pending so gateway gets most recent)
 //     let cmd = null;
 //     if (orConditions.length > 0) {
 //       cmd = await Command.findOneAndUpdate(
 //         { status: "pending", $or: orConditions },
 //         { $set: { status: "sent" } },
-//         { sort: { createdAt: 1, _id: 1 }, new: true }
+//         // newest first so gateway receives most recent command
+//         { sort: { createdAt: -1, _id: -1 }, new: true }
 //       ).select("deviceId command params status");
 //     }
 
-//     // Fallback: command targeted at gateway itself
+//     // Fallback: command targeted at gateway itself (also choose newest)
 //     if (!cmd) {
 //       cmd = await Command.findOneAndUpdate(
 //         { deviceId, status: "pending" },
 //         { $set: { status: "sent" } },
-//         { sort: { createdAt: 1, _id: 1 }, new: true }
+//         { sort: { createdAt: -1, _id: -1 }, new: true }
 //       ).select("deviceId command params status");
 
 //       if (cmd) console.log(`[NEXT COMMAND] matched gateway-targeted command for ${deviceId}`);
@@ -608,6 +627,8 @@
 // });
 
 // module.exports = router;
+
+
 
 
 const express = require("express");
@@ -1157,22 +1178,19 @@ router.get("/:deviceId/next-command", async (req, res) => {
 router.post("/report", async (req, res) => {
   try {
     const { gw_id, devices, mac, cmd, commandId, brightness } = req.body;
-    console.log(`[REPORT] Received report: gw_id=${gw_id}, mac=${mac}, devices=${JSON.stringify(devices)}`); // Thêm log để debug
-
-    // Gateway new format
+    console.log(`[REPORT] Received report: gw_id=${gw_id}, mac=${mac}, devices=${JSON.stringify(devices)}`);
     if (gw_id && Array.isArray(devices)) {
-      // Map gw_id "GW_01" to actual gateway (find by type or hardcode if single gateway)
-      let gateway = await LightDevice.findOne({ type: "gateway" }); // Demo: assume single gateway
-      if (!gateway && mac && isValidMac(mac)) {
-        gateway = await LightDevice.findOne({ deviceId: mac.toUpperCase(), type: "gateway" });
-      }
-      const gatewayId = gateway ? gateway.deviceId : null;
+
+      // Tìm gateway trong DB
+      const gateway = await LightDevice.findOne({ deviceId: gw_id }) ||
+                       await LightDevice.findOne({ type: "gateway" });
+
+      const gatewayId = gateway?.deviceId ?? null;
 
       for (const d of devices) {
-        const nodeId = (d.deviceId || "").toString();
-        if (!nodeId) continue;
+        const nodeId = String(d.deviceId);
 
-        // Check if node exists, create if not (associate with gateway)
+        // Nếu node chưa tồn tại → tạo luôn
         let nodeDevice = await LightDevice.findOne({ deviceId: nodeId });
         if (!nodeDevice) {
           nodeDevice = await LightDevice.create({
@@ -1182,57 +1200,50 @@ router.post("/report", async (req, res) => {
             gatewayId: gatewayId,
             gps: { lat: null, lon: null },
             location: "",
-            user: gateway ? gateway.user : null,
+            user: gateway?.user ?? null,
             isDeleted: false,
-            isAssigned: !!gateway && !!gateway.user
+            isAssigned: !!gateway?.user
           });
 
-          console.log(`[REPORT] Created node ${nodeId} associated with gateway ${gatewayId}`);
+          console.log(`[REPORT] Created node ${nodeId}`);
         }
-
-        const br = (d.brightness !== undefined && d.brightness !== null) ? Number(d.brightness) : undefined;
-        const lux = (d.lux !== undefined && d.lux !== null) ? Number(d.lux) : undefined;
-        const current = (d.current !== undefined && d.current !== null) ? Number(d.current) : undefined;
-
-        const update = { lastUpdated: new Date() };
-        if (br !== undefined) update.brightness = br;
-        if (lux !== undefined) update.lux = lux;
-        if (current !== undefined) update.current = current;
-
-        await LightStatus.findOneAndUpdate(
-          { deviceId: nodeId },
-          { $set: update },
-          { upsert: true }
-        );
+        await LightStatus.create({
+          deviceId: nodeId,
+          brightness: d.brightness ?? null,
+          lux: d.lux ?? null,
+          current: d.current ?? null,
+          isOnline: true,
+          lastSeen: new Date(),
+          lastUpdated: new Date()
+        });
       }
 
       res.json({ ok: true });
-      console.log(`[REPORT] Processed gateway report gw_id=${gw_id} devices=${devices.length}`);
+      console.log(`[REPORT] Stored history records for ${devices.length} nodes`);
       return;
     }
-
-    // Legacy format (mac + cmd)
     if (mac) {
-      const deviceId = mac.toUpperCase();
-
-      await LightStatus.findOneAndUpdate(
-        { deviceId },
-        { $set: { relay: cmd === 1, brightness: brightness ?? 50, lastUpdated: new Date() } },
-        { upsert: true }
-      );
+      await LightStatus.create({
+        deviceId: mac.toUpperCase(),
+        relay: cmd === 1,
+        brightness: brightness ?? 50,
+        lastSeen: new Date(),
+        lastUpdated: new Date()
+      });
 
       if (commandId) {
         await Command.findOneAndUpdate({ _id: commandId }, { $set: { status: "done" } });
       }
 
       res.json({ ok: true });
-      console.log(`[REPORT-LEGACY] Processed report for ${deviceId}, cmd=${cmd}, brightness=${brightness}`);
+      console.log(`[REPORT-LEGACY] Inserted history for ${mac}`);
       return;
     }
 
     res.status(400).json({ ok: false, message: "Invalid report format" });
+
   } catch (err) {
-    console.error("[REPORT] error:", err && err.stack ? err.stack : err);
+    console.error("[REPORT] error:", err);
     res.status(500).json({ ok: false, message: "Lỗi khi xử lý báo cáo" });
   }
 });
