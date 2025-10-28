@@ -1,4 +1,4 @@
-// routes/history.js  // Thêm file mới này vào backend/routes
+// routes/history.js
 const express = require('express');
 const router = express.Router();
 const Command = require('../models/Command');
@@ -6,12 +6,12 @@ const ActivityLog = require('../models/ActivityLog');
 const User = require('../models/User');
 const Schedule = require('../models/Schedule');
 const LightStatus = require('../models/LightStatus');
-const { authenticate } = require('../middleware/auth');  // Giả sử có auth
+const { authenticate } = require('../middleware/auth');
 
 // GET /api/commands: Lịch sử chỉnh đèn
 router.get('/commands', authenticate, async (req, res) => {
   try {
-    const data = await Command.find({}).sort({ createdAt: -1 }).lean();
+    const data = await Command.find({}).sort({ createAt: -1 }).limit(100).lean();  // Thêm limit tránh overload
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -22,7 +22,7 @@ router.get('/commands', authenticate, async (req, res) => {
 // GET /api/activitylogs: Lịch sử đăng nhập
 router.get('/activitylogs', authenticate, async (req, res) => {
   try {
-    const data = await ActivityLog.find({}).sort({ createAt: -1 }).lean();
+    const data = await ActivityLog.find({}).sort({ createAt: -1 }).limit(100).lean();
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -33,7 +33,7 @@ router.get('/activitylogs', authenticate, async (req, res) => {
 // GET /api/users: Lịch sử tạo người dùng
 router.get('/users', authenticate, async (req, res) => {
   try {
-    const data = await User.find({}).sort({ createdAt: -1 }).lean();
+    const data = await User.find({}).sort({ createdAt: -1 }).limit(100).lean();
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -44,7 +44,7 @@ router.get('/users', authenticate, async (req, res) => {
 // GET /api/schedules: Lịch sử đặt lịch
 router.get('/schedules', authenticate, async (req, res) => {
   try {
-    const data = await Schedule.find({}).sort({ createdAt: -1 }).lean();
+    const data = await Schedule.find({}).sort({ createdAt: -1 }).limit(100).lean();
     res.json(data);
   } catch (err) {
     console.error(err);
@@ -52,10 +52,5 @@ router.get('/schedules', authenticate, async (req, res) => {
   }
 });
 
-// Đã có /status/history, nhưng nếu cần chỉnh, thêm param inf -> lấy all
-// Giả sử chỉnh routes/status.js, thêm logic nếu periodMinutes='inf' thì bỏ filter time
-// Trong routes/status.js, sửa phần query:
-const startDate = periodMinutes === 'inf' ? new Date(0) : new Date(Date.now() - minutes * 60 * 1000);
-// Và query: { createdAt: { $gte: startDate } } -> nếu inf, $gte: new Date(0) lấy all
-
+// Comment về /status/history: Đúng, nhưng bạn cần thêm vào routes/status.js (không phải ở đây)
 module.exports = router;
