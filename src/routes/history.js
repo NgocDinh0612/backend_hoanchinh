@@ -51,6 +51,22 @@ router.get('/schedules', authenticate, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+// GET /api/lightstatus: Lịch sử trạng thái đèn
+router.get('/lightstatus', authenticate, async (req, res) => {
+  try {
+    const data = await LightStatus
+      .find({ 
+        createdAt: { $exists: true, $ne: null, $type: "date" } // Chỉ lấy bản ghi có createdAt hợp lệ
+      })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+    res.json(data);
+  } catch (err) {
+    console.error('[LightStatus History] error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // Comment về /status/history: Đúng, nhưng bạn cần thêm vào routes/status.js (không phải ở đây)
 module.exports = router;
