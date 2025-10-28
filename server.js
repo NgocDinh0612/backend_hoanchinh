@@ -368,7 +368,7 @@ app.use('/api/status', require('./src/routes/status'));
 app.use('/api/schedule', require('./src/routes/schedule'));
 app.use('/api/devices', require('./src/routes/device'));
 app.use('/api/gateway', require('./src/routes/gateway'));
-app.use('/api', require('./routes/history'));
+app.use('/api', require('./src/routes/history'));
 // Health check
 app.get('/health', (req, res) => {
   res.json({ ok: true, uptime: process.uptime(), env: process.env.NODE_ENV || 'development' });
