@@ -1173,7 +1173,7 @@ router.post("/:id/command", authenticate, async (req, res) => {
 
 
 
-/// lệnh next-command mới để tạo lịch
+/// lệnh next-command mới để tạo lịch  phù hợp
 
 // routes/devices.js (sửa route GET /:deviceId/next-command)
 router.get("/:deviceId/next-command", async (req, res) => {
