@@ -4,7 +4,7 @@ const router = express.Router();
 const Command = require('../models/Command');
 const ActivityLog = require('../models/ActivityLog');
 const User = require('../models/User');
-const Schedule = require('../models/Schedule');
+const Schedule = require('../models/schedule');
 const LightStatus = require('../models/LightStatus');
 const { authenticate } = require('../middleware/auth');
 
