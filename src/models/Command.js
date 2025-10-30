@@ -9,7 +9,7 @@
 
     // module.exports = mongoose.model('Command', CommandSchema);
 
-//thêm lịch
+//thêm lệnh tạo lịch
 
 const mongoose = require('mongoose');
 
