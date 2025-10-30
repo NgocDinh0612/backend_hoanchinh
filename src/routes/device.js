@@ -1103,6 +1103,79 @@ router.post("/:id/command", authenticate, async (req, res) => {
  * deviceId = gateway MAC (e.g. "98:A3:...") as gateway will call this
  * Gateway expects: { ok:true, devices: [ { deviceId:"ND_01", brightness:80 }, ... ] }
  */
+
+
+
+// router.get("/:deviceId/next-command", async (req, res) => {
+//   try {
+//     const { deviceId } = req.params;
+//     const device = await LightDevice.findOne({ deviceId, isDeleted: { $ne: true }, type: "gateway" });
+//     if (!device) {
+//       return res.status(404).json({ ok: false, message: "Device not found" });
+//     }
+
+//     // Collect nodes under this gateway (if any)
+//     const nodes = await LightDevice.find({ gatewayId: deviceId, isDeleted: { $ne: true }, type: "node" }).select("deviceId");
+//     const nodeIds = nodes.map(n => n.deviceId);
+
+//     // Build conditions:
+//     const orConditions = [];
+//     if (nodeIds.length > 0) {
+//       orConditions.push({ deviceId: { $in: nodeIds } }); // commands targeted at known nodes
+//     }
+//     // Match commands targeted at ND_* where params.sourceGateway equals this gateway (catch commands created even if node absent in DB)
+//     orConditions.push({ $and: [{ 'params.sourceGateway': deviceId }, { deviceId: { $regex: '^ND_' } }] });
+
+//     // Try to find node-targeted command first (choose newest pending so gateway gets most recent)
+//     let cmd = null;
+//     if (orConditions.length > 0) {
+//       cmd = await Command.findOneAndUpdate(
+//         { status: "pending", $or: orConditions },
+//         { $set: { status: "sent" } },
+//         // newest first so gateway receives most recent command
+//         { sort: { createdAt: -1, _id: -1 }, new: true }
+//       ).select("deviceId command params status");
+//     }
+
+//     // Fallback: command targeted at gateway itself (also choose newest)
+//     if (!cmd) {
+//       cmd = await Command.findOneAndUpdate(
+//         { deviceId, status: "pending" },
+//         { $set: { status: "sent" } },
+//         { sort: { createdAt: -1, _id: -1 }, new: true }
+//       ).select("deviceId command params status");
+
+//       if (cmd) console.log(`[NEXT COMMAND] matched gateway-targeted command for ${deviceId}`);
+//     } else {
+//       const matchedViaSourceGateway = cmd.params && cmd.params.sourceGateway === deviceId && /^ND_/.test(cmd.deviceId);
+//       console.log(`[NEXT COMMAND] matched node-targeted command for ${deviceId} -> target=${cmd.deviceId} (viaSourceGateway=${matchedViaSourceGateway})`);
+//     }
+
+//     // Prepare response in gateway format
+//     const devicesResp = [];
+//     if (cmd) {
+//       if (cmd.command === "BRIGHTNESS" && cmd.params && typeof cmd.params.value !== "undefined") {
+//         devicesResp.push({ deviceId: cmd.deviceId, brightness: cmd.params.value });
+//       } else if (cmd.command === "ON" || cmd.command === "OFF") {
+//         devicesResp.push({ deviceId: cmd.deviceId, state: cmd.command === "ON" });
+//       } else {
+//         devicesResp.push({ deviceId: cmd.deviceId, command: cmd.command, params: cmd.params || {} });
+//       }
+//     }
+
+//     res.json({ ok: true, devices: devicesResp });
+//     console.log(`[NEXT COMMAND] Response for ${deviceId}: ${JSON.stringify({ devices: devicesResp, cmd })}`);
+//   } catch (err) {
+//     console.error("[NEXT COMMAND] error:", err && err.stack ? err.stack : err);
+//     res.status(500).json({ ok: false, message: "Server error" });
+//   }
+// });
+
+
+
+/// lệnh next-command mới để tạo lịch
+
+// routes/devices.js (sửa route GET /:deviceId/next-command)
 router.get("/:deviceId/next-command", async (req, res) => {
   try {
     const { deviceId } = req.params;
@@ -1127,7 +1200,11 @@ router.get("/:deviceId/next-command", async (req, res) => {
     let cmd = null;
     if (orConditions.length > 0) {
       cmd = await Command.findOneAndUpdate(
-        { status: "pending", $or: orConditions },
+        { 
+          status: "pending", 
+          $or: orConditions,
+          $or: [{ scheduledAt: null }, { scheduledAt: { $lte: new Date() } }]  // Chỉ lấy lệnh ngay hoặc đã đến giờ
+        },
         { $set: { status: "sent" } },
         // newest first so gateway receives most recent command
         { sort: { createdAt: -1, _id: -1 }, new: true }
@@ -1137,7 +1214,11 @@ router.get("/:deviceId/next-command", async (req, res) => {
     // Fallback: command targeted at gateway itself (also choose newest)
     if (!cmd) {
       cmd = await Command.findOneAndUpdate(
-        { deviceId, status: "pending" },
+        { 
+          deviceId, 
+          status: "pending",
+          $or: [{ scheduledAt: null }, { scheduledAt: { $lte: new Date() } }]  // Chỉ lấy lệnh ngay hoặc đã đến giờ
+        },
         { $set: { status: "sent" } },
         { sort: { createdAt: -1, _id: -1 }, new: true }
       ).select("deviceId command params status");
@@ -1167,8 +1248,6 @@ router.get("/:deviceId/next-command", async (req, res) => {
     res.status(500).json({ ok: false, message: "Server error" });
   }
 });
-
-
 /**
  * ==============================
  * ESP báo cáo trạng thái
