@@ -1,4 +1,4 @@
-// models/schedule.js
+// models/schedule.js đổi tên
 const mongoose = require('mongoose');
 
 const scheduleSchema = new mongoose.Schema({
