@@ -1,47 +1,68 @@
 // routes/schedule.js
 const express = require('express');
 const router = express.Router();
-const Command = require('../models/Command');
+const Schedule = require('../models/schedule'); // Sửa: dùng Schedule thay vì Command
 const { authenticate } = require('../middleware/auth');
 
-// POST /api/schedule: Đặt lịch (tạo Command với scheduledAt)
+// POST /api/schedule: Đặt lịch (với repeat, daysOfWeek)
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { deviceId, brightness, scheduledAt } = req.body; // scheduledAt = "2025-04-15T08:00:00"
+    const { gatewayId, deviceId, brightness, startTime, endTime, action, daysOfWeek, repeat } = req.body; // Thêm các trường từ model
 
-    if (!deviceId || !brightness || !scheduledAt) {
+    if (!gatewayId || !deviceId || !brightness || !startTime || !endTime || !action) {
       return res.status(400).json({ ok: false, message: "Missing required fields" });
     }
 
-    const scheduleTime = new Date(scheduledAt);
-    if (isNaN(scheduleTime.getTime()) || scheduleTime <= new Date()) {
-      return res.status(400).json({ ok: false, message: "Scheduled time must be in the future" });
+    // Validate times (HH:mm:ss)
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
+    if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
+      return res.status(400).json({ ok: false, message: "Invalid time format (HH:mm:ss)" });
     }
 
-    const cmd = new Command({
+    // Validate daysOfWeek if weekly
+    if (repeat === 'weekly' && (!daysOfWeek || !Array.isArray(daysOfWeek) || daysOfWeek.length === 0)) {
+      return res.status(400).json({ ok: false, message: "daysOfWeek required for weekly repeat" });
+    }
+
+    const schedule = new Schedule({
+      gatewayId,
       deviceId,
-      command: "BRIGHTNESS",
-      params: { value: brightness },
-      status: "pending",
-      scheduledAt: scheduleTime
+      brightness,
+      startTime,
+      endTime,
+      action,
+      daysOfWeek: daysOfWeek || [],
+      repeat: repeat || 'none'
     });
 
-    await cmd.save();
+    await schedule.save();
 
-    res.json({ ok: true, message: "Schedule set", command: cmd });
+    res.json({ ok: true, message: "Schedule set", schedule });
   } catch (err) {
     console.error("[SCHEDULE] error:", err);
     res.status(500).json({ ok: false, message: "Server error" });
   }
 });
 
-// GET /api/schedule: Lấy tất cả lịch (để hiển thị)
+// GET /api/schedule: Lấy tất cả lịch
 router.get('/', authenticate, async (req, res) => {
   try {
-    const schedules = await Command.find({ scheduledAt: { $ne: null } }).sort({ scheduledAt: 1 });
+    const schedules = await Schedule.find().sort({ createdAt: -1 });
     res.json({ ok: true, schedules });
   } catch (err) {
     console.error("[SCHEDULE GET] error:", err);
+    res.status(500).json({ ok: false, message: "Server error" });
+  }
+});
+
+// DELETE /api/schedule/:id: Xóa lịch (thêm để hỗ trợ xóa từ frontend)
+router.delete('/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Schedule.findByIdAndDelete(id);
+    res.json({ ok: true, message: "Schedule deleted" });
+  } catch (err) {
+    console.error("[SCHEDULE DELETE] error:", err);
     res.status(500).json({ ok: false, message: "Server error" });
   }
 });
