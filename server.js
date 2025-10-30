@@ -330,7 +330,7 @@ mongoose.connect(process.env.MONGO_URL, {
 // Import models (đường dẫn theo cấu trúc dự án của bạn)
 const User = require('./src/models/User'); // model user
 const LightStatus = require('./src/models/LightStatus');
-const Schedule = require('./src/models/Schedule');
+const Schedule = require('./src/models/schedule');
 
 // ----------- WebSocket authentication (JWT) -----------
 io.use((socket, next) => {
