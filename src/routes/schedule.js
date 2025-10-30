@@ -1,4 +1,4 @@
-// routes/schedule.js
+// routes/schedule.js fix đổi tên
 const express = require('express');
 const router = express.Router();
 const Command = require('../models/Command');
