@@ -1,43 +1,48 @@
+// routes/schedule.js
 const express = require('express');
 const router = express.Router();
-const Schedule = require('../models/Schedule');
+const Command = require('../models/Command');
+const { authenticate } = require('../middleware/auth');
 
-// Thêm lịch
-router.post('/', async (req, res) => {
+// POST /api/schedule: Đặt lịch (tạo Command với scheduledAt)
+router.post('/', authenticate, async (req, res) => {
   try {
-    const { startTime, endTime, action, daysOfWeek } = req.body;
-    if (!startTime || !endTime || !action || !Array.isArray(daysOfWeek)) {
-      return res.status(400).json({ message: 'Thiếu thông tin' });
+    const { deviceId, brightness, scheduledAt } = req.body; // scheduledAt = "2025-04-15T08:00:00"
+
+    if (!deviceId || !brightness || !scheduledAt) {
+      return res.status(400).json({ ok: false, message: "Missing required fields" });
     }
 
-    const newSchedule = new Schedule({ startTime, endTime, action, daysOfWeek });
-    await newSchedule.save();
-    res.status(201).json({ message: 'Lịch đã lưu', schedule: newSchedule });
+    const scheduleTime = new Date(scheduledAt);
+    if (isNaN(scheduleTime.getTime()) || scheduleTime <= new Date()) {
+      return res.status(400).json({ ok: false, message: "Scheduled time must be in the future" });
+    }
+
+    const cmd = new Command({
+      deviceId,
+      command: "BRIGHTNESS",
+      params: { value: brightness },
+      status: "pending",
+      scheduledAt: scheduleTime
+    });
+
+    await cmd.save();
+
+    res.json({ ok: true, message: "Schedule set", command: cmd });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("[SCHEDULE] error:", err);
+    res.status(500).json({ ok: false, message: "Server error" });
   }
 });
 
-// Xem tất cả lịch
-router.get('/', async (req, res) => {
+// GET /api/schedule: Lấy tất cả lịch (để hiển thị)
+router.get('/', authenticate, async (req, res) => {
   try {
-    const schedules = await Schedule.find().sort({ createdAt: -1 });
-    res.json(schedules);
+    const schedules = await Command.find({ scheduledAt: { $ne: null } }).sort({ scheduledAt: 1 });
+    res.json({ ok: true, schedules });
   } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Xóa lịch
-router.delete('/:id', async (req, res) => {
-  try {
-    const result = await Schedule.findByIdAndDelete(req.params.id);
-    if (!result) {
-      return res.status(404).json({ message: 'Không tìm thấy lịch để xóa' });
-    }
-    res.json({ message: 'Đã xóa lịch thành công' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("[SCHEDULE GET] error:", err);
+    res.status(500).json({ ok: false, message: "Server error" });
   }
 });
 
