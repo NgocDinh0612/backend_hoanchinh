@@ -334,17 +334,23 @@ router.get(
 
 
 router.get("/success", (req, res) => {
+  const { accessToken, refreshToken, email } = req.query;
+
   res.send(`
     <script>
-      window.opener.postMessage({
-        accessToken: "${req.query.accessToken}",
-        refreshToken: "${req.query.refreshToken}"
-      }, window.location.origin);
-      window.close();
+      if (window.opener) {
+        window.opener.postMessage({
+          accessToken: "${accessToken}",
+          refreshToken: "${refreshToken}",
+          user: { email: "${email || ''}" }
+        }, "http://localhost:3000"); // GỬI VỀ FRONTEND LOCAL
+        window.close();
+      } else {
+        document.body.innerHTML = "<h3>Lỗi: Không thể kết nối. Vui lòng thử lại.</h3>";
+      }
     </script>
   `);
 });
-
 // Gửi email xác thực
 router.post("/request-verification", async (req, res) => {
   const { email } = req.body;
