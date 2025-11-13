@@ -255,8 +255,18 @@ const SECRET_KEY = process.env.JWT_SECRET || 'secret';
 const REFRESH_SECRET = process.env.REFRESH_SECRET || 'refresh_secret';
 
 // Security middleware
-app.use(helmet({
-  contentSecurityPolicy: false, // tắt nếu frontend load script ngoài
+// app.use(helmet({
+//   contentSecurityPolicy: false, // tắt nếu frontend load script ngoài
+// }));
+
+
+app.use(helmet.contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'"],  // Cho phép từ domain chính
+    scriptSrc: ["'self'", "'unsafe-inline'"],  // Cho phép script inline (postMessage)
+    fontSrc: ["'self'", 'data:', 'https://be-js12.onrender.com'],  // Fix lỗi font
+    frameAncestors: ["'none'"],  // Không cho phép iframe (tăng bảo mật)
+  },
 }));
 
 // CORS: nếu bạn dùng cookie/credentials đổi origin và credentials: true
