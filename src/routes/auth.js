@@ -335,7 +335,10 @@ router.get(
 
 router.get("/success", (req, res) => {
   const { accessToken, refreshToken, email } = req.query;
-
+  res.setHeader(
+      "Content-Security-Policy",
+      "script-src 'self' 'unsafe-inline'; frame-ancestors 'none';"
+    );
   res.send(`
     <script>
       if (window.opener) {
