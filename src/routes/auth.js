@@ -804,7 +804,7 @@ router.post("/login", async (req, res) => {
   const refreshToken = jwt.sign({ userId: user._id }, REFRESH_SECRET, {
     expiresIn: "7d",
   });
-  refreshTokens.push(refreshToken);
+  // refreshTokens.push(refreshToken);
 
   res.json({ accessToken, refreshToken });
 });
@@ -845,6 +845,7 @@ router.post("/refresh-token", async (req, res) => {
     const user = await User.findById(decoded.id);
     if (!user) return res.status(401).json({ message: "User không tồn tại" });
 
+    // Tạo access token mới
     const accessToken = jwt.sign(
       { id: user._id, role: user.role },
       JWT_SECRET,
