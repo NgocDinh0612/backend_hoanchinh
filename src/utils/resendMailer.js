@@ -5,7 +5,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 async function sendResendEmail({ to, subject, html, text }) {
   try {
     await resend.emails.send({
-      from: 'dinhbadao01677063814@gmail.com',
+      from: 'Smart Streetlight <onboarding@resend.dev>',
       to: [to],
       subject,
       html,
