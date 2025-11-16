@@ -323,8 +323,16 @@ router.get(
           <p>Liên kết này có hiệu lực trong 15 phút.</p>
         `,
       });
-
-      return res.redirect(`${process.env.BASE_URL}/pending-verification`);
+        
+      // return res.redirect(`${process.env.BASE_URL}/pending-verification`);
+      return res.send(`
+        <script>
+          if (window.opener) {
+            window.opener.location.href = "https://frontend-datn-ten.vercel.app/pending-verification";
+            window.close();
+          }
+        </script>
+      `);
     } catch (err) {
       console.error("Google callback error:", err);
       res.redirect("/login?error=google-auth-failed");
