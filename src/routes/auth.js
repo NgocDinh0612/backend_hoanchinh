@@ -335,10 +335,13 @@ router.get(
 
 router.get("/success", (req, res) => {
   const { accessToken, refreshToken, email } = req.query;
+
+  // GHI ĐÈ CSP CỦA RENDER
   res.setHeader(
-      "Content-Security-Policy",
-      "script-src 'self' 'unsafe-inline'; frame-ancestors 'none';"
-    );
+    "Content-Security-Policy",
+    "script-src 'self' 'unsafe-inline'; font-src 'self' data: https:; frame-ancestors 'none';"
+  );
+
   res.send(`
     <script>
       if (window.opener) {
@@ -346,7 +349,7 @@ router.get("/success", (req, res) => {
           accessToken: "${accessToken}",
           refreshToken: "${refreshToken}",
           user: { email: "${email || ''}" }
-        }, "http://localhost:3000"); // GỬI VỀ FRONTEND LOCAL
+        }, "https://frontend-datn-ten.vercel.app"); // GỬI VỀ VERCEL
         window.close();
       } else {
         document.body.innerHTML = "<h3>Lỗi: Không thể kết nối. Vui lòng thử lại.</h3>";
