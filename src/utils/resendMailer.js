@@ -1,4 +1,4 @@
-// utils/resendMailer.js
+// utils/resendMailer.js fix
 const { Resend } = require('resend');
 const resend = new Resend(process.env.RESEND_API_KEY);
 
