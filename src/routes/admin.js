@@ -40,6 +40,12 @@
 //     res.json(users);
 //   } catch (err) {
 //     console.error("[GET /admin/users] error:", err.message);
+//     res.status(500).json({ message: "Lỗi server khi lấy danh sách người dùng" });
+//   }
+// });
+
+// module.exports = router;
+
 
 
 
@@ -111,8 +117,3 @@ router.get("/users", authenticate, authorize(["admin"]), async (req, res) => {
 });
 
 module.exports = router;
-//     res.status(500).json({ message: "Lỗi server khi lấy danh sách người dùng" });
-//   }
-// });
-
-// module.exports = router;
