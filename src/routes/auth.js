@@ -527,27 +527,24 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
-const nodemailer = require("nodemailer");
 const crypto = require("crypto");
-
 const User = require("../models/User");
 const ActivityLog = require("../models/ActivityLog");
 const { authenticate } = require("../middleware/auth");
+const { sendResendEmail } = require("../utils/resendMailer"); // ← MỚI
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const REFRESH_SECRET = process.env.REFRESH_SECRET;
-// let refreshTokens = [];
 
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL, // test local
-      // callbackURL: process.env.BACKEND_URL + "/auth/google/callback" // test Render
+      callbackURL: process.env.GOOGLE_CALLBACK_URL,
     },
     async (accessToken, refreshToken, profile, done) => {
-      return done(null, profile); // không lưu DB ở đây
+      return done(null, profile);
     }
   )
 );
@@ -569,10 +566,8 @@ router.get(
       const email = req.user.emails?.[0]?.value;
       const name = req.user.displayName;
       const role = req.session.role || "user";
-
       let user = await User.findOne({ email });
 
-      // Nếu user đã xác minh → đăng nhập luôn
       if (user && user.isVerified) {
         const accessToken = jwt.sign(
           { id: user._id, role: user.role },
@@ -582,8 +577,7 @@ router.get(
         const refreshToken = jwt.sign({ id: user._id }, REFRESH_SECRET, {
           expiresIn: "7d",
         });
-      
-        // GỬI QUA postMessage → KHÔNG DÙNG redirect
+
         return res.send(`
           <script>
             if (window.opener) {
@@ -598,10 +592,8 @@ router.get(
         `);
       }
 
-      // Nếu user chưa tồn tại hoặc chưa xác minh
-      const crypto = require("crypto");
       const token = crypto.randomBytes(32).toString("hex");
-      const expiry = Date.now() + 15 * 60 * 1000; // 15 phút
+      const expiry = Date.now() + 15 * 60 * 1000;
 
       if (!user) {
         user = new User({
@@ -617,45 +609,34 @@ router.get(
         user.verificationExpiry = expiry;
         user.isVerified = false;
       }
-
       await user.save();
 
-      // Gửi mail xác thực
-      const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: process.env.MAIL_USER,
-          pass: process.env.MAIL_PASS,
-        },
+      const verifyLink = `${process.env.SERVER_URL}/auth/verify-email?token=${token}`;
+      await sendResendEmail({
+        to: email,
+        subject: "Xác minh tài khoản Smart Streetlight",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+            <h2 style="color: #10b981;">Chào ${name || "bạn"}!</h2>
+            <p>Bạn vừa đăng nhập bằng Google. Vui lòng xác minh email để tiếp tục:</p>
+            <a href="${verifyLink}" style="display: inline-block; background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              Xác minh ngay
+            </a>
+            <p style="font-size: 0.9em; color: #666; margin-top: 20px;">
+              Liên kết hết hạn sau <strong>15 phút</strong>.
+            </p>
+          </div>
+        `,
       });
 
-      const verifyLink = `${process.env.SERVER_URL}/auth/verify-email?token=${token}`;
-          await sendResendEmail({
-            to: email,
-            subject: "Xác minh tài khoản Smart Streetlight",
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-                <h2 style="color: #10b981;">Chào ${name || "bạn"}!</h2>
-                <p>Bạn vừa đăng nhập bằng Google. Vui lòng xác minh email để tiếp tục:</p>
-                <a href="${verifyLink}" style="display: inline-block; background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-                  Xác minh ngay
-                </a>
-                <p style="font-size: 0.9em; color: #666; margin-top: 20px;">
-                  Liên kết hết hạn sau <strong>15 phút</strong>.
-                </p>
-              </div>
-            `,
-          });
-        
-      // return res.redirect(`${process.env.BASE_URL}/pending-verification`);
       return res.send(`
-            <script>
-              if (window.opener) {
-                window.opener.location.href = "https://frontend-datn-ten.vercel.app/pending-verification";
-                window.close();
-              }
-            </script>
-          `);
+        <script>
+          if (window.opener) {
+            window.opener.location.href = "https://frontend-datn-ten.vercel.app/pending-verification";
+            window.close();
+          }
+        </script>
+      `);
     } catch (err) {
       console.error("Google callback error:", err);
       res.redirect("/login?error=google-auth-failed");
@@ -663,16 +644,12 @@ router.get(
   }
 );
 
-
 router.get("/success", (req, res) => {
   const { accessToken, refreshToken, email } = req.query;
-
-  // GHI ĐÈ CSP CỦA RENDER
   res.setHeader(
     "Content-Security-Policy",
     "script-src 'self' 'unsafe-inline'; font-src 'self' data: https:; frame-ancestors 'none';"
   );
-
   res.send(`
     <script>
       if (window.opener) {
@@ -680,7 +657,7 @@ router.get("/success", (req, res) => {
           accessToken: "${accessToken}",
           refreshToken: "${refreshToken}",
           user: { email: "${email || ''}" }
-        }, "https://frontend-datn-ten.vercel.app"); // GỬI VỀ VERCEL
+        }, "https://frontend-datn-ten.vercel.app");
         window.close();
       } else {
         document.body.innerHTML = "<h3>Lỗi: Không thể kết nối. Vui lòng thử lại.</h3>";
@@ -688,7 +665,7 @@ router.get("/success", (req, res) => {
     </script>
   `);
 });
-// Gửi email xác thực
+
 router.post("/request-verification", async (req, res) => {
   const { email } = req.body;
   try {
@@ -705,7 +682,6 @@ router.post("/request-verification", async (req, res) => {
     await user.save();
 
     const verifyLink = `${process.env.SERVER_URL}/auth/verify-email?token=${token}`;
-
     await sendResendEmail({
       to: email,
       subject: "Xác minh địa chỉ email",
@@ -722,7 +698,7 @@ router.post("/request-verification", async (req, res) => {
     res.status(500).json({ message: "Lỗi khi gửi email xác minh." });
   }
 });
-// Xác thực email
+
 router.get("/verify-email", async (req, res) => {
   const { token } = req.query;
   try {
@@ -730,7 +706,6 @@ router.get("/verify-email", async (req, res) => {
       verificationToken: token,
       verificationExpiry: { $gt: Date.now() },
     });
-
     if (!user) return res.status(400).send("Token không hợp lệ hoặc đã hết hạn.");
 
     user.isVerified = true;
@@ -738,7 +713,6 @@ router.get("/verify-email", async (req, res) => {
     user.verificationExpiry = undefined;
     await user.save();
 
-    // Gửi sang frontend trang hoàn tất đăng ký
     res.redirect(`${process.env.BASE_URL}/complete-registration?email=${user.email}`);
   } catch (err) {
     console.error("verify-email error:", err);
@@ -746,7 +720,6 @@ router.get("/verify-email", async (req, res) => {
   }
 });
 
-// Hoàn tất đăng ký
 router.post("/complete-registration", async (req, res) => {
   const { email, username, password, firstName, lastName, contact } = req.body;
   try {
@@ -768,14 +741,10 @@ router.post("/complete-registration", async (req, res) => {
   }
 });
 
-// Đăng nhập
 router.post("/login", async (req, res) => {
   const { username, password } = req.body;
   const user = await User.findOne({ username });
-  if (!user) return res.status(401).json({ message: "Sai tài khoản hoặc mật khẩu" });
-
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch)
+  if (!user || !(await bcrypt.compare(password, user.password)))
     return res.status(401).json({ message: "Sai tài khoản hoặc mật khẩu" });
 
   await ActivityLog.create({
@@ -791,32 +760,11 @@ router.post("/login", async (req, res) => {
     JWT_SECRET,
     { expiresIn: "15m" }
   );
-
   const refreshToken = jwt.sign({ userId: user._id }, REFRESH_SECRET, {
     expiresIn: "7d",
   });
-  // refreshTokens.push(refreshToken);
 
   res.json({ accessToken, refreshToken });
-});
-
-router.post("/refresh", (req, res) => {
-  const { refreshToken } = req.body;
-  if (!refreshToken || !refreshTokens.includes(refreshToken)) {
-    return res.status(403).json({ message: "Refresh token không hợp lệ" });
-  }
-
-  jwt.verify(refreshToken, REFRESH_SECRET, (err, payload) => {
-    if (err) return res.status(403).json({ message: "Refresh token hết hạn" });
-
-    const accessToken = jwt.sign(
-      { userId: payload.userId },
-      JWT_SECRET,
-      { expiresIn: "15m" }
-    );
-
-    res.json({ accessToken });
-  });
 });
 
 router.get("/me", authenticate, (req, res) => {
@@ -833,16 +781,14 @@ router.post("/refresh-token", async (req, res) => {
 
   try {
     const decoded = jwt.verify(refreshToken, REFRESH_SECRET);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id || decoded.userId);
     if (!user) return res.status(401).json({ message: "User không tồn tại" });
 
-    // Tạo access token mới
     const accessToken = jwt.sign(
       { id: user._id, role: user.role },
       JWT_SECRET,
       { expiresIn: "1h" }
     );
-
     res.json({ accessToken });
   } catch (err) {
     res.status(401).json({ message: "Token không hợp lệ hoặc hết hạn" });
