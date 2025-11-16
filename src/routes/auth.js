@@ -255,7 +255,7 @@ router.get(
 
 router.get(
   "/google/callback",
-  passport.authenticate("google", { failureRedirect: "/login" }),
+  passport.authenticate("google", { failureRedirect: "https://frontend-datn-ten.vercel.app/login" }),
   async (req, res) => {
     try {
       const email = req.user.emails?.[0]?.value;
