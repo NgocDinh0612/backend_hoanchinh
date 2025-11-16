@@ -630,28 +630,32 @@ router.get(
       });
 
       const verifyLink = `${process.env.SERVER_URL}/auth/verify-email?token=${token}`;
-
-      await transporter.sendMail({
-        from: `"Smart Streetlight" <${process.env.MAIL_USER}>`,
-        to: email,
-        subject: "Xác minh tài khoản Smart Streetlight",
-        html: `
-          <p>Chào ${name || "bạn"},</p>
-          <p>Nhấn vào liên kết dưới đây để xác minh tài khoản Gmail của bạn:</p>
-          <a href="${verifyLink}" target="_blank">${verifyLink}</a>
-          <p>Liên kết này có hiệu lực trong 15 phút.</p>
-        `,
-      });
+          await sendResendEmail({
+            to: email,
+            subject: "Xác minh tài khoản Smart Streetlight",
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+                <h2 style="color: #10b981;">Chào ${name || "bạn"}!</h2>
+                <p>Bạn vừa đăng nhập bằng Google. Vui lòng xác minh email để tiếp tục:</p>
+                <a href="${verifyLink}" style="display: inline-block; background: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                  Xác minh ngay
+                </a>
+                <p style="font-size: 0.9em; color: #666; margin-top: 20px;">
+                  Liên kết hết hạn sau <strong>15 phút</strong>.
+                </p>
+              </div>
+            `,
+          });
         
       // return res.redirect(`${process.env.BASE_URL}/pending-verification`);
       return res.send(`
-        <script>
-          if (window.opener) {
-            window.opener.location.href = "https://frontend-datn-ten.vercel.app/pending-verification";
-            window.close();
-          }
-        </script>
-      `);
+            <script>
+              if (window.opener) {
+                window.opener.location.href = "https://frontend-datn-ten.vercel.app/pending-verification";
+                window.close();
+              }
+            </script>
+          `);
     } catch (err) {
       console.error("Google callback error:", err);
       res.redirect("/login?error=google-auth-failed");
@@ -688,11 +692,9 @@ router.get("/success", (req, res) => {
 router.post("/request-verification", async (req, res) => {
   const { email } = req.body;
   try {
-    // Tạo token xác minh
     const token = crypto.randomBytes(32).toString("hex");
-    const expiry = Date.now() + 15 * 60 * 1000; // 15 phút
+    const expiry = Date.now() + 15 * 60 * 1000;
 
-    // Tạo mới hoặc cập nhật nếu email tồn tại
     let user = await User.findOne({ email });
     if (!user) {
       user = new User({ email, verificationToken: token, verificationExpiry: expiry });
@@ -702,30 +704,19 @@ router.post("/request-verification", async (req, res) => {
     }
     await user.save();
 
-    // Gửi mail xác minh
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASS,
-      },
-    });
-
     const verifyLink = `${process.env.SERVER_URL}/auth/verify-email?token=${token}`;
 
-    await transporter.sendMail({
-      from: `"Smart Streetlight" <${process.env.MAIL_USER}>`,
+    await sendResendEmail({
       to: email,
-      subject: "Xác minh địa chỉ email của bạn",
+      subject: "Xác minh địa chỉ email",
       html: `
-        <p>Chào bạn,</p>
-        <p>Nhấn vào liên kết sau để xác minh email:</p>
-        <a href="${verifyLink}" target="_blank">${verifyLink}</a>
-        <p>Liên kết này sẽ hết hạn sau 15 phút.</p>
+        <p>Nhấn vào liên kết để xác minh:</p>
+        <a href="${verifyLink}">${verifyLink}</a>
+        <p>Hết hạn sau 15 phút.</p>
       `,
     });
 
-    res.status(200).json({ message: "Đã gửi email xác minh thành công!" });
+    res.json({ message: "Đã gửi email xác minh thành công!" });
   } catch (err) {
     console.error("request-verification error:", err);
     res.status(500).json({ message: "Lỗi khi gửi email xác minh." });
