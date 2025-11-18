@@ -657,7 +657,7 @@ router.get("/success", (req, res) => {
           accessToken: "${accessToken}",
           refreshToken: "${refreshToken}",
           user: { email: "${email || ''}" }
-        }, "https://frontend-datn-ten.vercel.app");
+        }, "*");
         window.close();
       } else {
         document.body.innerHTML = "<h3>Lỗi: Không thể kết nối. Vui lòng thử lại.</h3>";
